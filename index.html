@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900|Material+Icons" rel="stylesheet" type="text/css">
+  <link href="https://cdn.jsdelivr.net/npm/quasar@2.12.0/dist/quasar.prod.css" rel="stylesheet" type="text/css">
+  <style>
+    .val-pos { color: #2e7d32; font-weight: bold; }
+    .val-neg { color: #c62828; font-weight: bold; }
+    .val-zero { color: #1565c0; font-weight: bold; }
+    .prob-badge { font-size: 1.1em; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="q-app">
+    <q-layout view="lHh Lpr lFf" class="bg-blue-grey-1">
+      <q-page-container>
+        <q-page padding>
+          
+          <q-card flat bordered class="q-pa-md q-mb-md shadow-2" style="border-radius: 12px;">            
+            <div class="row q-col-gutter-md">
+              <div class="col-xs-12 col-sm-4">
+                <q-input v-model.number="mL" type="number" label="Momio Local" filled color="indigo" />
+              </div>
+              <div class="col-xs-12 col-sm-4">
+                <q-input v-model.number="mE" type="number" label="Momio Empate" filled color="orange-9" />
+              </div>
+              <div class="col-xs-12 col-sm-4">
+                <q-input v-model.number="mV" type="number" label="Momio Visitante" filled color="deep-purple" />
+              </div>
+
+              <div class="col-xs-12 col-sm-6 col-md-4">
+                <q-input v-model.number="maxBet" type="number" label="Presupuesto Máximo" filled prefix="$" color="black" />
+              </div>
+              
+              <div class="col-xs-12 col-sm-3 col-md-4">
+                <q-btn label="Calcular" color="primary" icon="bolt" @click="calcular" class="full-width" size="lg" unelevated />
+              </div>
+              
+              <div class="col-xs-12 col-sm-3 col-md-4">
+                <q-btn label="Excel" color="green-9" icon="file_download" @click="exportTable" :disable="rows.length === 0" class="full-width" size="lg" outline />
+              </div>
+            </div>
+          </q-card>
+
+          <q-table
+            title="Resultados Basados en Probabilidad Implícita"
+            :rows="rows"
+            :columns="columns"
+            row-key="id"
+            flat bordered
+            :pagination="{ rowsPerPage: 10, sortBy: 'prob' }"
+          >
+            <template v-slot:body-cell-prob="props">
+              <q-td :props="props">
+                <q-chip color="blue-1" text-color="blue-9" class="prob-badge">
+                  {{ props.value }}%
+                </q-chip>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-apuestas="props">
+              <q-td :props="props">
+                <div class="row q-gutter-xs">
+                  <q-badge color="indigo-1" text-color="indigo-9">L: ${{props.row.l}}</q-badge>
+                  <q-badge color="orange-1" text-color="orange-10">E: ${{props.row.e}}</q-badge>
+                  <q-badge color="deep-purple-1" text-color="deep-purple-9">V: ${{props.row.v}}</q-badge>
+                </div>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell="props">
+              <q-td :props="props">
+                <span :class="getColorClass(props.value)">
+                  {{ typeof props.value === 'number' ? '$' + props.value : props.value }}
+                </span>
+              </q-td>
+            </template>
+          </q-table>
+
+        </q-page>
+      </q-page-container>
+    </q-layout>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/quasar@2.12.0/dist/quasar.umd.prod.js"></script>
+
+  <script>
+    const { createApp, ref } = Vue;
+    const { exportFile } = Quasar;
+
+    createApp({
+      setup() {
+        const mL = ref(450);
+        const mE = ref(300);
+        const mV = ref(-150);
+        const maxBet = ref(30);
+        const rows = ref([]);
+
+        const columns = [
+          { name: 'prob', label: 'Prob. Éxito', field: 'prob', align: 'center', sortable: true },
+          { name: 'apuestas', label: 'Distribución', align: 'left', field: 'l' },
+          { name: 'nL', label: 'Neto Local', field: 'nL', align: 'center', sortable: true },
+          { name: 'nE', label: 'Neto Empate', field: 'nE', align: 'center', sortable: true },
+          { name: 'nV', label: 'Neto Visitante', field: 'nV', align: 'center', sortable: true },
+          { name: 'ideal', label: 'Suma Ideal', field: 'sumaIdeal', align: 'right', sortable: true }
+        ];
+
+        const getImpliedProb = (momio) => {
+          if (momio >= 0) return 100 / (momio + 100);
+          return Math.abs(momio) / (Math.abs(momio) + 100);
+        };
+
+        const getColorClass = (val) => {
+          const n = parseFloat(val);
+          if (isNaN(n)) return '';
+          if (n > 0) return 'val-pos';
+          if (n < 0) return 'val-neg';
+          return 'val-zero';
+        };
+
+        const formulaRetorno = (bet, momio) => {
+          if (bet <= 0) return 0;
+          if (momio >= 0) return parseFloat((bet * (momio / 100) + bet).toFixed(2));
+          return parseFloat(Math.ceil((bet / (Math.abs(momio) / 100)) + bet));
+        };
+
+        const calcular = () => {
+          const res = [];
+          // Probabilidades individuales basadas en momios
+          const pL = getImpliedProb(mL.value);
+          const pE = getImpliedProb(mE.value);
+          const pV = getImpliedProb(mV.value);
+
+          for (let l = 0; l <= maxBet.value; l++) {
+            let curL = mL.value < 0 ? 0 : l;
+            for (let e = 0; e <= (maxBet.value - curL); e++) {
+              let curE = mE.value < 0 ? 0 : e;
+              let curV = maxBet.value - curL - curE;
+              if (mV.value < 0) curV = 0;
+
+              if ((curL + curE + curV) <= maxBet.value) {
+                const nL = parseFloat((formulaRetorno(curL, mL.value) - maxBet.value).toFixed(2));
+                const nE = parseFloat((formulaRetorno(curE, mE.value) - maxBet.value).toFixed(2));
+                const nV = parseFloat((formulaRetorno(curV, mV.value) - maxBet.value).toFixed(2));
+                
+                // Cálculo de probabilidad de ganar algo (Neto >= 0)
+                let probExito = 0;
+                if (nL >= 0) probExito += pL;
+                if (nE >= 0) probExito += pE;
+                if (nV >= 0) probExito += pV;
+
+                const sumaIdeal = (nE + Math.max(nL, nV)).toFixed(2);
+                
+                res.push({ 
+                  id: Math.random(), 
+                  prob: (probExito * 100).toFixed(1),
+                  l: curL, e: curE, v: curV, 
+                  nL, nE, nV, sumaIdeal 
+                });
+              }
+              if (mE.value < 0) break;
+            }
+            if (mL.value < 0) break;
+          }
+          
+          const unique = Array.from(new Set(res.map(a => `${a.l}-${a.e}-${a.v}`))).map(k => res.find(a => `${a.l}-${a.e}-${a.v}` === k));
+          
+          // Ordenar: Primero por mayor probabilidad, luego por Suma Ideal
+          rows.value = unique.sort((a, b) => {
+            if (b.prob !== a.prob) return b.prob - a.prob;
+            return b.sumaIdeal - a.sumaIdeal;
+          });
+        };
+
+        const exportTable = () => {
+          let content = [`"REPORTE CON PROBABILIDAD","L:${mL.value} E:${mE.value} V:${mV.value}"`, ""];
+          content.push(columns.map(col => `"${col.label}"`).join(','));
+          rows.value.forEach(r => content.push([`"${r.prob}%"`,`"L:${r.l} E:${r.e} V:${r.v}"`,`"${r.nL}"`,`"${r.nE}"`,`"${r.nV}"`,`"${r.sumaIdeal}"`].join(',')));
+          exportFile(`Análisis_Probabilidad.csv`, content.join('\r\n'), 'text/csv');
+        };
+
+        return { mL, mE, mV, maxBet, rows, columns, calcular, getColorClass, exportTable };
+      }
+    }).use(Quasar).mount('#q-app');
+  </script>
+</body>
+</html>
