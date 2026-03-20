@@ -45,7 +45,7 @@
           </q-card>
 
           <q-table
-            title="Resultados Basados en Probabilidad Implícita"
+            title="Resultados Basados en Probabilidad"
             :rows="rows"
             :columns="columns"
             row-key="id"
@@ -99,13 +99,13 @@
         const maxBet = ref(30);
         const rows = ref([]);
 
-        const columns = [
-          { name: 'prob', label: 'Prob. Éxito', field: 'prob', align: 'center', sortable: true },
+        const columns = [        
           { name: 'apuestas', label: 'Distribución', align: 'left', field: 'l' },
           { name: 'nL', label: 'Neto Local', field: 'nL', align: 'center', sortable: true },
           { name: 'nE', label: 'Neto Empate', field: 'nE', align: 'center', sortable: true },
           { name: 'nV', label: 'Neto Visitante', field: 'nV', align: 'center', sortable: true },
-          { name: 'ideal', label: 'Suma Ideal', field: 'sumaIdeal', align: 'right', sortable: true }
+          { name: 'ideal', label: 'Suma Ideal', field: 'sumaIdeal', align: 'right', sortable: true },
+          { name: 'prob', label: 'Prob. Éxito', field: 'prob', align: 'center', sortable: true }
         ];
 
         const getImpliedProb = (momio) => {
